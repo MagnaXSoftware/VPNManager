@@ -23,7 +23,7 @@ It is fully forward and backwards compatible with pivpn and can be used simultan
 `go get` the binary:
 
 ```bash
-go get -u magnax.ca/VPNManager
+go get -u magnax.ca/VPNManager/cmd/manager
 ```
 
 In the future, we'll provide pre-built binaries.
