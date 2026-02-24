@@ -70,8 +70,8 @@ func CmdDisable(ctx context.Context, cmd *cli.Command) error {
 		if err != nil {
 			return err
 		}
-		list := strings.Split(selection, ",")
-		for _, item := range list {
+		list := strings.SplitSeq(selection, ",")
+		for item := range list {
 			item = strings.TrimSpace(item)
 			if len(item) == 0 {
 				continue
@@ -151,8 +151,8 @@ func CmdEnable(ctx context.Context, cmd *cli.Command) error {
 		if err != nil {
 			return err
 		}
-		list := strings.Split(selection, ",")
-		for _, item := range list {
+		list := strings.SplitSeq(selection, ",")
+		for item := range list {
 			item = strings.TrimSpace(item)
 			if len(item) == 0 {
 				continue
@@ -222,8 +222,8 @@ func CmdRemove(ctx context.Context, cmd *cli.Command) error {
 		if err != nil {
 			return err
 		}
-		list := strings.Split(selection, ",")
-		for _, item := range list {
+		list := strings.SplitSeq(selection, ",")
+		for item := range list {
 			item = strings.TrimSpace(item)
 			if len(item) == 0 {
 				continue
