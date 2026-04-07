@@ -1,5 +1,10 @@
 version: 2
 
+gitlab_urls:
+  api: https://git.magnax.ca/api/v4/
+  download: https://git.magnax.ca
+  use_job_token: true
+
 before:
   hooks:
     - go mod tidy
@@ -77,4 +82,8 @@ archives:
   - id: orchestrator
     ids:
       - orchestrator
+    formats: ["binary"]
+  - id: orchestrator-debug
+    ids:
+      - orchestrator-debug
     formats: ["binary"]
