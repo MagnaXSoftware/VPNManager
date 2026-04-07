@@ -1,0 +1,29 @@
+@startuml
+
+
+Manager -> Orchestrator ++: HELLO {VERSION} {NAME}
+
+
+Manager <- Orchestrator ++ : UpdateRequest
+return UpdateResponse
+
+par
+loop every PollInterval
+    Manager <- Orchestrator ++ : UpdateRequest
+    return UpdateResponse
+end
+
+group action [driven from WebUI]
+    Manager <- Orchestrator ++ : Request
+    return Response
+end
+end
+
+opt [if termination from Manager]
+    Manager -> Orchestrator : CloseMessage
+end
+
+Manager <- Orchestrator !! : CloseMessage
+deactivate Orchestrator
+
+@enduml

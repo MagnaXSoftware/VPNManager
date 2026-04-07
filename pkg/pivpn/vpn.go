@@ -10,21 +10,25 @@ import (
 	"regexp"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 
 	"magnax.ca/VPNManager/pkg/wireguard"
 )
 
 const (
-	pivpnConfigFile     = "/etc/pivpn/wireguard/setupVars.conf"
-	pivpnPiholeHostFile = "/etc/pivpn/hosts.wireguard"
-	defaultConfigsDir   = "/etc/wireguard/configs"
-	defaultTunnelDir    = "/etc/wireguard/"
+	DefaultConfigFilePath     = "/etc/pivpn/wireguard/setupVars.conf"
+	DefaultPiholeHostFilePath = "/etc/pivpn/hosts.wireguard"
+
+	DefaultTunnelName   = "wg0"
+	DefaultConfigsDir   = "/etc/wireguard/configs"
+	DefaultTunnelDir    = "/etc/wireguard/"
+	DefaultKeysFilePath = "/etc/wireguard/keys"
 )
 
 var (
-	ClientNotFoundErr   = errors.New("client not found")
-	ClientNameExistsErr = errors.New("client with this name already exists")
+	ErrClientNotFound = errors.New("client not found")
+	ErrClientExists   = errors.New("client with this name already exists")
 )
 
 type Vpn struct {
@@ -41,7 +45,7 @@ type Vpn struct {
 }
 
 func LoadVpn() (*Vpn, error) {
-	return LoadVpnWithLocations("wg0", pivpnConfigFile, defaultTunnelDir, defaultConfigsDir, defaultKeysFilepath)
+	return LoadVpnWithLocations(DefaultTunnelName, DefaultConfigFilePath, DefaultTunnelDir, DefaultConfigsDir, DefaultKeysFilePath)
 }
 
 func LoadVpnWithLocations(name, pivpnSetupVars, tunnelDir, configsDir, KeysDir string) (*Vpn, error) {
@@ -128,21 +132,22 @@ func (t *Vpn) SyncTunnel() error {
 }
 
 func (t *Vpn) SyncClients() error {
+	// todo rewrite the clients .conf files
 	return os.WriteFile(filepath.Join(t.configsDir, "clients.txt"), []byte(t.Clients.ToClientInfoList().Export()), 0644)
 }
 
 func (t *Vpn) SyncPihole() error {
-	if _, err := os.Stat(pivpnPiholeHostFile); os.IsNotExist(err) {
+	if _, err := os.Stat(DefaultPiholeHostFilePath); os.IsNotExist(err) {
 		return nil
 	}
 	var builder strings.Builder
 
-	builder.WriteString(fmt.Sprintf("%s %s.pivpn\n", t.Server.Interface.Addresses[0].Addr().String(), "server"))
+	_, _ = fmt.Fprintf(&builder, "%s %s.pivpn\n", t.Server.Interface.Addresses[0].Addr().String(), "pivpn")
 	for _, client := range t.Clients {
-		builder.WriteString(fmt.Sprintf("%s %s.pivpn\n", client.Interface.Addresses[0].Addr().String(), client.DNSName()))
+		_, _ = fmt.Fprintf(&builder, "%s %s.pivpn\n", client.Interface.Addresses[0].Addr().String(), client.DNSName())
 	}
 
-	err := os.WriteFile(pivpnPiholeHostFile, []byte(builder.String()), 0644)
+	err := os.WriteFile(DefaultPiholeHostFilePath, []byte(builder.String()), 0644)
 	if err != nil {
 		return err
 	}
@@ -264,7 +269,7 @@ func (t *Vpn) AddClient(name string) error {
 
 	for _, c := range t.Clients {
 		if c.Name == name {
-			return ClientNameExistsErr
+			return ErrClientExists
 		}
 	}
 
@@ -368,7 +373,32 @@ func (t *Vpn) AddClient(name string) error {
 		return err
 	}
 
+	err = ensureDir(t.Conf.UserConfigPath, t.Conf.UserId, t.Conf.GroupId)
+	if err != nil {
+		return err
+	}
 	err = os.WriteFile(filepath.Join(t.Conf.UserConfigPath, name+".conf"), []byte(client.Export()), 0640)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func ensureDir(path string, uid, gid int) error {
+	dir, err := os.Stat(path)
+	if err == nil {
+		if dir.IsDir() {
+			return nil
+		}
+		return &os.PathError{Op: "mkdir", Path: path, Err: syscall.ENOTDIR}
+	}
+
+	err = os.MkdirAll(path, 0775)
+	if err != nil {
+		return err
+	}
+	err = os.Chown(path, uid, gid)
 	if err != nil {
 		return err
 	}

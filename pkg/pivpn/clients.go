@@ -1,5 +1,8 @@
 package pivpn
 
+//go:generate go tool msgp
+//msgp:ignore ClientInfoList ClientInfo
+
 import (
 	"bufio"
 	"encoding/binary"
@@ -11,6 +14,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/skip2/go-qrcode"
 
 	"magnax.ca/VPNManager/pkg/wireguard"
 )
@@ -25,10 +30,10 @@ type (
 // Client has exactly 1 peer, which is the vpn server.
 // Each Client and vpn server pair share 1 unique pre-shared key.
 type Client struct {
-	wireguard.Config
+	wireguard.Config `msg:"cfg"`
 
-	Disabled     bool
-	CreationDate time.Time
+	Disabled     bool      `msg:"disabled"`
+	CreationDate time.Time `msg:"created"`
 }
 
 var (
@@ -48,6 +53,14 @@ func (c *Client) ToPeer() wireguard.Peer {
 	}
 }
 
+func (c *Client) WriteQrCode(w io.Writer) error {
+	img, err := qrcode.New(c.Export(), qrcode.High)
+	if err != nil {
+		return err
+	}
+	return img.Write(512, w)
+}
+
 func (c *ClientList) ToClientInfoList() ClientInfoList {
 	l := make(ClientInfoList, len(*c))
 	for i, client := range *c {
@@ -60,6 +73,15 @@ func (c *ClientList) ToClientInfoList() ClientInfoList {
 	}
 
 	return l
+}
+
+func (c *ClientList) Client(name string) *Client {
+	for _, client := range *c {
+		if client.Name == name {
+			return &client
+		}
+	}
+	return nil
 }
 
 type ClientInfo struct {
@@ -136,7 +158,7 @@ func (c ClientInfoList) Export() string {
 	var builder strings.Builder
 
 	for _, client := range c {
-		builder.WriteString(fmt.Sprintf("%-15s %44s %10d %10d\n", client.Name, client.PublicKey.String(), client.CreationDate.Unix(), ip2int(client.IPAddr)))
+		_, _ = fmt.Fprintf(&builder, "%-15s %44s %10d %10d\n", client.Name, client.PublicKey.String(), client.CreationDate.Unix(), ip2int(client.IPAddr))
 	}
 
 	return builder.String()

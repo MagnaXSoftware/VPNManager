@@ -3,11 +3,14 @@ package pivpn
 import (
 	"fmt"
 	"io"
+	"iter"
 	"net/netip"
+	"os/user"
 	"path/filepath"
 	"strconv"
 
 	"github.com/joho/godotenv"
+
 	"magnax.ca/VPNManager/pkg/wireguard"
 )
 
@@ -15,8 +18,19 @@ type Config struct {
 	DNS            []netip.Addr
 	Endpoint       wireguard.Endpoint
 	UserConfigPath string
+	Username       string
+	UserId         int
+	GroupId        int
 
 	all map[string]string
+}
+
+type MissingSetupVar struct {
+	Var string
+}
+
+func (m *MissingSetupVar) Error() string {
+	return fmt.Sprintf("`%s` was not present in the pivpn setup vars", m.Var)
 }
 
 func LoadConfig(r io.Reader) (*Config, error) {
@@ -46,7 +60,7 @@ func LoadConfig(r io.Reader) (*Config, error) {
 	if host, ok := envs["pivpnHOST"]; ok {
 		conf.Endpoint.Host = host
 	} else {
-		return nil, fmt.Errorf("pivpnHOST was not present in the pivpn setup vars")
+		return nil, &MissingSetupVar{"pivpnHOST"}
 	}
 	if portString, ok := envs["pivpnPORT"]; ok {
 		port, err := strconv.ParseUint(portString, 10, 16)
@@ -59,7 +73,27 @@ func LoadConfig(r io.Reader) (*Config, error) {
 	if installHome, ok := envs["install_home"]; ok {
 		conf.UserConfigPath = filepath.Join(installHome, "configs")
 	} else {
-		return nil, fmt.Errorf("install_home was not present in the pivpn setup vars")
+		return nil, &MissingSetupVar{"install_home"}
+	}
+
+	if installUser, ok := envs["install_user"]; ok {
+		conf.Username = installUser
+		userObj, err := user.Lookup(installUser)
+		if err != nil {
+			return nil, err
+		}
+		uid, err := strconv.ParseInt(userObj.Uid, 10, 0)
+		if err != nil {
+			return nil, err
+		}
+		conf.UserId = int(uid)
+		gid, err := strconv.ParseInt(userObj.Gid, 10, 0)
+		if err != nil {
+			return nil, err
+		}
+		conf.GroupId = int(gid)
+	} else {
+		return nil, &MissingSetupVar{"install_user"}
 	}
 
 	conf.all = envs
@@ -70,4 +104,14 @@ func LoadConfig(r io.Reader) (*Config, error) {
 func (c *Config) Get(name string) (string, bool) {
 	val, ok := c.all[name]
 	return val, ok
+}
+
+func (c *Config) All() iter.Seq2[string, string] {
+	return func(yield func(string, string) bool) {
+		for k, v := range c.all {
+			if !yield(k, v) {
+				return
+			}
+		}
+	}
 }

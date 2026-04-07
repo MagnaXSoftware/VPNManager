@@ -1,5 +1,9 @@
 package wireguard
 
+//go:generate go tool msgp
+//msgp:shim netip.Prefix as:string using:(netip.Prefix).String/netip.ParsePrefix witherr:true
+//msgp:shim netip.Addr as:string using:(netip.Addr).String/netip.ParseAddr witherr:true
+
 /* SPDX-License-Identifier: MIT
  *
  * Original code: Copyright (C) 2019-2022 WireGuard LLC. All Rights Reserved.
@@ -13,7 +17,6 @@ import (
 	"fmt"
 	"net/netip"
 	"strings"
-	"time"
 
 	"golang.org/x/crypto/curve25519"
 )
@@ -21,74 +24,43 @@ import (
 const KeyLength = 32
 
 type Endpoint struct {
-	Host string
-	Port uint16
+	Host string `msg:"host"`
+	Port uint16 `msg:"port"`
 }
 
 type (
-	Key           [KeyLength]byte
-	HandshakeTime time.Duration
-	Bytes         uint64
+	Key [KeyLength]byte
 )
 
 type Config struct {
-	Name      string
-	Interface Interface
-	Peers     []Peer
+	Name      string    `msg:"name"`
+	Interface Interface `msg:"interface"`
+	Peers     []Peer    `msg:"peers"`
 }
 
 type Interface struct {
-	PrivateKey Key
-	Addresses  []netip.Prefix
-	ListenPort uint16
-	MTU        uint16
-	DNS        []netip.Addr
-	DNSSearch  []string
-	PreUp      string
-	PostUp     string
-	PreDown    string
-	PostDown   string
-	TableOff   bool
+	PrivateKey Key            `msg:"key"`
+	Addresses  []netip.Prefix `msg:"addresses"`
+	ListenPort uint16         `msg:"listen_port"`
+	MTU        uint16         `msg:"mtu"`
+	DNS        []netip.Addr   `msg:"dns,omitempty"`
+	DNSSearch  []string       `msg:"dns_search,omitempty"`
+	PreUp      string         `msg:"pre_up,omitempty"`
+	PostUp     string         `msg:"post_up,omitempty"`
+	PreDown    string         `msg:"pre_down,omitempty"`
+	PostDown   string         `msg:"post_down,omitempty"`
+	Table      string         `msg:"table,omitempty"`
 }
 
 type Peer struct {
-	Name     string
-	Disabled bool
+	Name     string `msg:"name"`
+	Disabled bool   `msg:"disabled"`
 
-	PublicKey           Key
-	PresharedKey        Key
-	AllowedIPs          []netip.Prefix
-	Endpoint            Endpoint
-	PersistentKeepalive uint16
-}
-
-func (c *Config) IntersectsWith(other *Config) bool {
-	allRoutes := make(map[netip.Prefix]bool, len(c.Interface.Addresses)*2+len(c.Peers)*3)
-	for _, a := range c.Interface.Addresses {
-		allRoutes[netip.PrefixFrom(a.Addr(), a.Addr().BitLen())] = true
-		allRoutes[a.Masked()] = true
-	}
-	for i := range c.Peers {
-		for _, a := range c.Peers[i].AllowedIPs {
-			allRoutes[a.Masked()] = true
-		}
-	}
-	for _, a := range other.Interface.Addresses {
-		if allRoutes[netip.PrefixFrom(a.Addr(), a.Addr().BitLen())] {
-			return true
-		}
-		if allRoutes[a.Masked()] {
-			return true
-		}
-	}
-	for i := range other.Peers {
-		for _, a := range other.Peers[i].AllowedIPs {
-			if allRoutes[a.Masked()] {
-				return true
-			}
-		}
-	}
-	return false
+	PublicKey           Key            `msg:"key"`
+	PresharedKey        Key            `msg:"psk,omitzero"`
+	AllowedIPs          []netip.Prefix `msg:"ips"`
+	Endpoint            Endpoint       `msg:"endpoint,omitempty"`
+	PersistentKeepalive uint16         `msg:"keepalive,omitempty"`
 }
 
 func (e *Endpoint) String() string {

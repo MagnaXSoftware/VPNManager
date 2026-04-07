@@ -1,0 +1,80 @@
+version: 2
+
+before:
+  hooks:
+    - go mod tidy
+    - go generate ./...
+
+builds:
+  - id: manager
+    main: ./cmd/manager
+    binary: vpn-manager
+    tags:
+      - no_otel
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+    goarch:
+      - '386'
+      - amd64
+      - arm
+      - arm64
+    goarm:
+      - '6'
+      - '7'
+    flags:
+      - -trimpath
+    ldflags: '-s -w -X magnax.ca/VPNManager/internal/version.version={{.Version}} -X magnax.ca/VPNManager/internal/version.commit={{.Commit}} -X magnax.ca/VPNManager/internal/version.date={{.CommitDate}} -X magnax.ca/VPNManager/internal/version.builtBy=goreleaser'
+    mod_timestamp: "{{ .CommitTimestamp }}"
+  - id: orchestrator
+    main: ./cmd/orchestrator
+    binary: vpn-orchestrator
+    tags:
+      - no_otel
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+    goarch:
+      - '386'
+      - amd64
+      - arm
+      - arm64
+    goarm:
+      - '6'
+      - '7'
+    flags:
+      - -trimpath
+    ldflags: '-s -w -X magnax.ca/VPNManager/internal/version.version={{.Version}} -X magnax.ca/VPNManager/internal/version.commit={{.Commit}} -X magnax.ca/VPNManager/internal/version.date={{.CommitDate}} -X magnax.ca/VPNManager/internal/version.builtBy=goreleaser'
+    mod_timestamp: "{{ .CommitTimestamp }}"
+  - id: orchestrator-debug
+    main: ./cmd/orchestrator
+    binary: vpn-orchestrator-debug
+    tags:
+      - no_otel
+      - debug
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+    goarch:
+      - '386'
+      - amd64
+      - arm
+      - arm64
+    goarm:
+      - '6'
+      - '7'
+    ldflags: '-s -w -X magnax.ca/VPNManager/internal/version.version={{.Version}}-debug -X magnax.ca/VPNManager/internal/version.commit={{.Commit}} -X magnax.ca/VPNManager/internal/version.date={{.CommitDate}} -X magnax.ca/VPNManager/internal/version.builtBy=goreleaser'
+    mod_timestamp: "{{ .CommitTimestamp }}"
+
+archives:
+  - id: manager
+    ids:
+      - manager
+    formats: ["binary"]
+  - id: orchestrator
+    ids:
+      - orchestrator
+    formats: ["binary"]

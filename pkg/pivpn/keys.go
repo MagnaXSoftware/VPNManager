@@ -9,10 +9,6 @@ import (
 	"magnax.ca/VPNManager/pkg/wireguard"
 )
 
-var (
-	defaultKeysFilepath = "/etc/wireguard/keys"
-)
-
 type IoError struct {
 	Err  error
 	File string
@@ -56,7 +52,7 @@ func NewKeysFromClient(client *Client) *Keys {
 }
 
 func ReadKeys(name string) (*Keys, error) {
-	return ReadKeysFromFS(name, os.DirFS(defaultKeysFilepath))
+	return ReadKeysFromFS(name, os.DirFS(DefaultKeysFilePath))
 }
 
 func ReadKeysFromFS(name string, fsys fs.FS) (*Keys, error) {
@@ -89,7 +85,7 @@ func (k *Keys) PublicKey() *wireguard.Key {
 }
 
 func (k *Keys) WriteOut() error {
-	return k.WriteOutDir(defaultKeysFilepath)
+	return k.WriteOutDir(DefaultKeysFilePath)
 }
 
 func writeOutAndChown(filepath string, data string) error {

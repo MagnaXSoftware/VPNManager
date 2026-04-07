@@ -19,18 +19,18 @@ func (p *Peer) Export() string {
 
 	if p.Name != "" {
 		insertDisabledPrefix()
-		builder.WriteString(fmt.Sprintf("### begin %s ###\n", p.Name))
+		_, _ = fmt.Fprintf(&builder, "### begin %s ###\n", p.Name)
 	}
 
 	insertDisabledPrefix()
 	builder.WriteString("[Peer]\n")
 
 	insertDisabledPrefix()
-	builder.WriteString(fmt.Sprintf("PublicKey = %s\n", p.PublicKey.String()))
+	_, _ = fmt.Fprintf(&builder, "PublicKey = %s\n", p.PublicKey.String())
 
 	if !p.PresharedKey.IsZero() {
 		insertDisabledPrefix()
-		builder.WriteString(fmt.Sprintf("PresharedKey = %s\n", p.PresharedKey.String()))
+		_, _ = fmt.Fprintf(&builder, "PresharedKey = %s\n", p.PresharedKey.String())
 	}
 
 	if len(p.AllowedIPs) > 0 {
@@ -39,22 +39,22 @@ func (p *Peer) Export() string {
 			addrStrings[i] = address.String()
 		}
 		insertDisabledPrefix()
-		builder.WriteString(fmt.Sprintf("AllowedIPs = %s\n", strings.Join(addrStrings[:], ", ")))
+		_, _ = fmt.Fprintf(&builder, "AllowedIPs = %s\n", strings.Join(addrStrings[:], ", "))
 	}
 
 	if !p.Endpoint.IsEmpty() {
 		insertDisabledPrefix()
-		builder.WriteString(fmt.Sprintf("Endpoint = %s\n", p.Endpoint.String()))
+		_, _ = fmt.Fprintf(&builder, "Endpoint = %s\n", p.Endpoint.String())
 	}
 
 	if p.PersistentKeepalive > 0 {
 		insertDisabledPrefix()
-		builder.WriteString(fmt.Sprintf("PersistentKeepalive = %d\n", p.PersistentKeepalive))
+		_, _ = fmt.Fprintf(&builder, "PersistentKeepalive = %d\n", p.PersistentKeepalive)
 	}
 
 	if p.Name != "" {
 		insertDisabledPrefix()
-		builder.WriteString(fmt.Sprintf("### end %s ###", p.Name))
+		_, _ = fmt.Fprintf(&builder, "### end %s ###", p.Name)
 	}
 	return builder.String()
 }
@@ -68,10 +68,10 @@ func (c *Config) Export() string {
 
 	builder.WriteString("[Interface]\n")
 
-	builder.WriteString(fmt.Sprintf("PrivateKey = %s\n", c.Interface.PrivateKey.String()))
+	_, _ = fmt.Fprintf(&builder, "PrivateKey = %s\n", c.Interface.PrivateKey.String())
 
 	if c.Interface.ListenPort > 0 {
-		builder.WriteString(fmt.Sprintf("ListenPort = %d\n", c.Interface.ListenPort))
+		_, _ = fmt.Fprintf(&builder, "ListenPort = %d\n", c.Interface.ListenPort)
 	}
 
 	if len(c.Interface.Addresses) > 0 {
@@ -79,7 +79,7 @@ func (c *Config) Export() string {
 		for i, address := range c.Interface.Addresses {
 			addrStrings[i] = address.String()
 		}
-		builder.WriteString(fmt.Sprintf("Address = %s\n", strings.Join(addrStrings[:], ", ")))
+		_, _ = fmt.Fprintf(&builder, "Address = %s\n", strings.Join(addrStrings[:], ", "))
 	}
 
 	if len(c.Interface.DNS)+len(c.Interface.DNSSearch) > 0 {
@@ -88,32 +88,34 @@ func (c *Config) Export() string {
 			addrStrings = append(addrStrings, address.String())
 		}
 		addrStrings = append(addrStrings, c.Interface.DNSSearch...)
-		builder.WriteString(fmt.Sprintf("DNS = %s\n", strings.Join(addrStrings[:], ", ")))
+		_, _ = fmt.Fprintf(&builder, "DNS = %s\n", strings.Join(addrStrings[:], ", "))
 	}
 
 	if c.Interface.MTU > 0 {
-		builder.WriteString(fmt.Sprintf("MTU = %d\n", c.Interface.MTU))
+		_, _ = fmt.Fprintf(&builder, "MTU = %d\n", c.Interface.MTU)
 	}
 
 	if len(c.Interface.PreUp) > 0 {
-		builder.WriteString(fmt.Sprintf("PreUp = %s\n", c.Interface.PreUp))
+		_, _ = fmt.Fprintf(&builder, "PreUp = %s\n", c.Interface.PreUp)
 	}
 	if len(c.Interface.PostUp) > 0 {
-		builder.WriteString(fmt.Sprintf("PostUp = %s\n", c.Interface.PostUp))
+		_, _ = fmt.Fprintf(&builder, "PostUp = %s\n", c.Interface.PostUp)
 	}
 	if len(c.Interface.PreDown) > 0 {
-		builder.WriteString(fmt.Sprintf("PreDown = %s\n", c.Interface.PreDown))
+		_, _ = fmt.Fprintf(&builder, "PreDown = %s\n", c.Interface.PreDown)
 	}
 	if len(c.Interface.PostDown) > 0 {
-		builder.WriteString(fmt.Sprintf("PostDown = %s\n", c.Interface.PostDown))
+		_, _ = fmt.Fprintf(&builder, "PostDown = %s\n", c.Interface.PostDown)
 	}
-	if c.Interface.TableOff {
-		builder.WriteString("Table = off\n")
+	if c.Interface.Table != "" {
+		_, _ = fmt.Fprintf(&builder, "Table = %s\n", c.Interface.Table)
 	}
+
+	builder.WriteString("\n")
 
 	for _, peer := range c.Peers {
 		builder.WriteString(peer.Export())
-		builder.WriteRune('\n')
+		builder.WriteString("\n")
 	}
 
 	return builder.String()

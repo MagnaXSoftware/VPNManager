@@ -1,0 +1,95 @@
+@import url('/static/pure-nr-min.css');
+
+/* Actual CSS */
+
+.page {
+    max-width: 1280px;
+    margin: 0 auto;
+}
+
+.grid {
+    display: flex;
+    justify-content: space-between;
+    margin-left: -1em;
+    margin-right: -1em;
+}
+
+.col {
+    flex: 1;
+    padding: 1em 0 0 1em;
+}
+
+table {
+    table-layout: fixed;
+    width: 100%;
+    margin: 1rem 0;
+    border-collapse: collapse;
+}
+
+#clients table form {
+    margin: 0 auto;
+    width: fit-content;
+}
+
+#clients table td:first-child{
+    padding: 0.25rem 0.75rem;
+}
+
+.button-success,
+.button-error,
+.button-warning,
+.button-secondary {
+    color: white;
+    border-radius: 4px;
+    text-shadow: 0 1px 1px rgba(0, 0, 0, 0.2);
+}
+
+.button-success {
+    background: rgb(28, 184, 65);
+    /* this is a green */
+}
+
+.button-error {
+    background: rgb(202, 60, 60);
+    /* this is a maroon */
+}
+
+.button-warning {
+    background: rgb(223, 117, 20);
+    /* this is an orange */
+}
+
+.button-secondary {
+    background: rgb(66, 184, 221);
+    /* this is a light blue */
+}
+
+input[type=submit],
+button[type=submit] {
+    margin: 0 .2rem;
+}
+
+.pure-menu-text {
+    padding: .5em 1em;
+}
+
+.text-center {
+    text-align: center;
+}
+
+.muted {
+    color: #999999;
+}
+
+.modal {
+    padding: 0.5rem;
+    margin: 0.5rem;
+    color: white;
+    border: 2px;
+    border-radius: 5px;
+}
+
+.danger {
+    background: rgb(202, 60, 60);
+    border-color: rgb(165, 45, 45);
+}

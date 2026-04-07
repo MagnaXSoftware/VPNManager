@@ -6,7 +6,7 @@ import (
 )
 
 var (
-	PeerNotFound = errors.New("peer not found")
+	ErrPeerNotFound = errors.New("peer not found")
 )
 
 func (c *Config) DisablePeer(name string) error {
@@ -17,7 +17,7 @@ func (c *Config) DisablePeer(name string) error {
 		}
 	}
 	if idx < 0 {
-		return PeerNotFound
+		return ErrPeerNotFound
 	}
 
 	c.Peers[idx].Disabled = true
@@ -32,7 +32,7 @@ func (c *Config) EnablePeer(name string) error {
 		}
 	}
 	if idx < 0 {
-		return PeerNotFound
+		return ErrPeerNotFound
 	}
 
 	c.Peers[idx].Disabled = false
@@ -47,7 +47,7 @@ func (c *Config) RemovePeer(name string) error {
 		}
 	}
 	if idx < 0 {
-		return PeerNotFound
+		return ErrPeerNotFound
 	}
 
 	c.Peers = append(c.Peers[:idx], c.Peers[idx+1:]...)

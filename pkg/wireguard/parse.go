@@ -108,14 +108,18 @@ func parsePersistentKeepalive(s string) (uint16, error) {
 	return uint16(m), nil
 }
 
-func parseTableOff(s string) (bool, error) {
-	if s == "off" {
-		return true, nil
-	} else if s == "auto" || s == "main" {
-		return false, nil
+func parseTable(s string) (string, error) {
+	switch s {
+	case "off":
+		fallthrough
+	case "auto":
+		fallthrough
+	case "main":
+		return s, nil
+	default:
+		_, err := strconv.ParseUint(s, 10, 32)
+		return s, err
 	}
-	_, err := strconv.ParseUint(s, 10, 32)
-	return false, err
 }
 
 func ParseKeyBase64(s string) (*Key, error) {
@@ -133,7 +137,7 @@ func ParseKeyBase64(s string) (*Key, error) {
 
 func splitList(s string) ([]string, error) {
 	var out []string
-	for _, split := range strings.Split(s, ",") {
+	for split := range strings.SplitSeq(s, ",") {
 		trim := strings.TrimSpace(split)
 		if len(trim) == 0 {
 			return nil, &ParseError{"Two commas in a row", s}
@@ -158,7 +162,6 @@ func (c *Config) maybeAddPeer(p *Peer) {
 }
 
 var (
-	spacesRE               = regexp.MustCompile(`\s+`)
 	beginRegex             = regexp.MustCompile(`^## begin ([a-zA-Z0-9.@_-]+) ###\s*$`)
 	beginWithDisabledRegex = regexp.MustCompile(`^(\[disabled] #)?## begin ([a-zA-Z0-9.@_-]+) ###\s*$`)
 	endRegex               = regexp.MustCompile(`^## end ([a-zA-Z0-9.@_-]+) ###\s*$`)
@@ -375,11 +378,11 @@ func (c *Config) UnmarshalReader(input io.Reader) error {
 			case "postdown":
 				c.Interface.PostDown = val
 			case "table":
-				tableOff, err := parseTableOff(val)
+				table, err := parseTable(val)
 				if err != nil {
 					return err
 				}
-				c.Interface.TableOff = tableOff
+				c.Interface.Table = table
 			default:
 				return &ParseError{"Invalid key for [Interface] section", key}
 			}

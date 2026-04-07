@@ -4,21 +4,73 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log"
 	"log/slog"
 	"os"
+	"os/signal"
 	"strconv"
 	"strings"
 
 	"github.com/urfave/cli/v3"
+
+	"magnax.ca/VPNManager/internal/version"
+	"magnax.ca/VPNManager/pkg/manager"
 	"magnax.ca/VPNManager/pkg/pivpn"
 )
 
+const (
+	DefaultConfigPath = "/etc/vpnmanager/manager.cfg"
+)
+
+func loadConfig(configFilePath string) (*manager.Config, error) {
+	src, err := os.ReadFile(configFilePath)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) && configFilePath == DefaultConfigPath {
+			log.Printf("default config file is missing, using default values instead")
+			return manager.DefaultConfig()
+		}
+		return nil, err
+	}
+
+	return manager.ParseConfig(src)
+}
+
 func CmdDaemon(ctx context.Context, cmd *cli.Command) error {
-	return errors.New("not implemented")
+	ctx, cancel := signal.NotifyContext(ctx, os.Interrupt, os.Kill)
+	defer cancel()
+
+	configFilePath := cmd.String("config")
+
+	for {
+		select {
+		case <-ctx.Done():
+			return nil
+		default:
+			cfg, err := loadConfig(configFilePath)
+			if err != nil {
+				return err
+			}
+
+			client := manager.NewClient(cfg)
+			client.Connect(ctx)
+		}
+	}
+
 }
 
 func CmdListClients(ctx context.Context, cmd *cli.Command) error {
-	vpn, err := pivpn.LoadVpn()
+	cfg, err := loadConfig(cmd.String("config"))
+	if err != nil {
+		return err
+	}
+
+	vpn, err := pivpn.LoadVpnWithLocations(
+		cfg.PiVPNConfig.Name,
+		cfg.PiVPNConfig.ConfigFilePath,
+		cfg.PiVPNConfig.TunnelDirectory,
+		cfg.PiVPNConfig.ConfigsDirectory,
+		cfg.PiVPNConfig.KeysDirectory,
+	)
 	if err != nil {
 		return err
 	}
@@ -41,7 +93,17 @@ func CmdListClients(ctx context.Context, cmd *cli.Command) error {
 }
 
 func CmdDisable(ctx context.Context, cmd *cli.Command) error {
-	vpn, err := pivpn.LoadVpn()
+	cfg, err := loadConfig(cmd.String("config"))
+	if err != nil {
+		return err
+	}
+	vpn, err := pivpn.LoadVpnWithLocations(
+		cfg.PiVPNConfig.Name,
+		cfg.PiVPNConfig.ConfigFilePath,
+		cfg.PiVPNConfig.TunnelDirectory,
+		cfg.PiVPNConfig.ConfigsDirectory,
+		cfg.PiVPNConfig.KeysDirectory,
+	)
 	if err != nil {
 		return err
 	}
@@ -70,8 +132,7 @@ func CmdDisable(ctx context.Context, cmd *cli.Command) error {
 		if err != nil {
 			return err
 		}
-		list := strings.Split(selection, ",")
-		for _, item := range list {
+		for item := range strings.SplitSeq(selection, ",") {
 			item = strings.TrimSpace(item)
 			if len(item) == 0 {
 				continue
@@ -122,7 +183,17 @@ func CmdDisable(ctx context.Context, cmd *cli.Command) error {
 }
 
 func CmdEnable(ctx context.Context, cmd *cli.Command) error {
-	vpn, err := pivpn.LoadVpn()
+	cfg, err := loadConfig(cmd.String("config"))
+	if err != nil {
+		return err
+	}
+	vpn, err := pivpn.LoadVpnWithLocations(
+		cfg.PiVPNConfig.Name,
+		cfg.PiVPNConfig.ConfigFilePath,
+		cfg.PiVPNConfig.TunnelDirectory,
+		cfg.PiVPNConfig.ConfigsDirectory,
+		cfg.PiVPNConfig.KeysDirectory,
+	)
 	if err != nil {
 		return err
 	}
@@ -151,8 +222,7 @@ func CmdEnable(ctx context.Context, cmd *cli.Command) error {
 		if err != nil {
 			return err
 		}
-		list := strings.Split(selection, ",")
-		for _, item := range list {
+		for item := range strings.SplitSeq(selection, ",") {
 			item = strings.TrimSpace(item)
 			if len(item) == 0 {
 				continue
@@ -203,7 +273,17 @@ func CmdEnable(ctx context.Context, cmd *cli.Command) error {
 }
 
 func CmdRemove(ctx context.Context, cmd *cli.Command) error {
-	vpn, err := pivpn.LoadVpn()
+	cfg, err := loadConfig(cmd.String("config"))
+	if err != nil {
+		return err
+	}
+	vpn, err := pivpn.LoadVpnWithLocations(
+		cfg.PiVPNConfig.Name,
+		cfg.PiVPNConfig.ConfigFilePath,
+		cfg.PiVPNConfig.TunnelDirectory,
+		cfg.PiVPNConfig.ConfigsDirectory,
+		cfg.PiVPNConfig.KeysDirectory,
+	)
 	if err != nil {
 		return err
 	}
@@ -222,8 +302,7 @@ func CmdRemove(ctx context.Context, cmd *cli.Command) error {
 		if err != nil {
 			return err
 		}
-		list := strings.Split(selection, ",")
-		for _, item := range list {
+		for item := range strings.SplitSeq(selection, ",") {
 			item = strings.TrimSpace(item)
 			if len(item) == 0 {
 				continue
@@ -274,7 +353,17 @@ func CmdRemove(ctx context.Context, cmd *cli.Command) error {
 }
 
 func CmdAdd(ctx context.Context, cmd *cli.Command) error {
-	vpn, err := pivpn.LoadVpn()
+	cfg, err := loadConfig(cmd.String("config"))
+	if err != nil {
+		return err
+	}
+	vpn, err := pivpn.LoadVpnWithLocations(
+		cfg.PiVPNConfig.Name,
+		cfg.PiVPNConfig.ConfigFilePath,
+		cfg.PiVPNConfig.TunnelDirectory,
+		cfg.PiVPNConfig.ConfigsDirectory,
+		cfg.PiVPNConfig.KeysDirectory,
+	)
 	if err != nil {
 		return err
 	}
@@ -283,7 +372,7 @@ func CmdAdd(ctx context.Context, cmd *cli.Command) error {
 
 	err = vpn.AddClient(name)
 	if err != nil {
-		return nil
+		return err
 	}
 
 	fmt.Printf("client %s added\n", name)
@@ -291,9 +380,19 @@ func CmdAdd(ctx context.Context, cmd *cli.Command) error {
 }
 
 func CmdSync(ctx context.Context, cmd *cli.Command) error {
-	vpn, err := pivpn.LoadVpn()
+	cfg, err := loadConfig(cmd.String("config"))
 	if err != nil {
-		return nil
+		return err
+	}
+	vpn, err := pivpn.LoadVpnWithLocations(
+		cfg.PiVPNConfig.Name,
+		cfg.PiVPNConfig.ConfigFilePath,
+		cfg.PiVPNConfig.TunnelDirectory,
+		cfg.PiVPNConfig.ConfigsDirectory,
+		cfg.PiVPNConfig.KeysDirectory,
+	)
+	if err != nil {
+		return err
 	}
 
 	if err := vpn.SyncClients(); err != nil {
@@ -314,6 +413,15 @@ func main() {
 		Name:                  "manager",
 		Usage:                 "Manage the pivpn wireguard server",
 		EnableShellCompletion: true,
+		Version:               version.Version(),
+		Flags: []cli.Flag{
+			&cli.StringFlag{
+				Name:    "config",
+				Aliases: []string{"c"},
+				Value:   DefaultConfigPath,
+				Usage:   "Load configuration from `FILE`",
+			},
+		},
 		Commands: []*cli.Command{
 			{
 				Name:   "list",
