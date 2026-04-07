@@ -1,7 +1,7 @@
 package manager
 
 import (
-	"log"
+	"log/slog"
 
 	"magnax.ca/VPNManager/pkg/api"
 	"magnax.ca/VPNManager/pkg/pivpn"
@@ -73,7 +73,7 @@ func processRequest(req *api.Request, cfg *Config) *api.Response {
 	}
 }
 
-func processUpdateRequest(cfg *Config) (msgp.Raw, error) {
+func loadVpn(cfg *Config) (*pivpn.Vpn, error) {
 	vpn, err := pivpn.LoadVpnWithLocations(
 		cfg.PiVPNConfig.Name,
 		cfg.PiVPNConfig.ConfigFilePath,
@@ -82,25 +82,28 @@ func processUpdateRequest(cfg *Config) (msgp.Raw, error) {
 		cfg.PiVPNConfig.KeysDirectory,
 	)
 	if err != nil {
-		log.Printf("unable to load VPN: %s", err)
+		slog.Error("unable to load VPN", "err", err)
 		return nil, err
 	}
 
+	vpn.SetReloadCmds(cfg.PiVPNConfig.ReloadPiholeCmd, cfg.PiVPNConfig.ReloadWgCmd)
+
+	return vpn, nil
+}
+
+func processUpdateRequest(cfg *Config) (msgp.Raw, error) {
+	vpn, err := loadVpn(cfg)
+	if err != nil {
+		return nil, err
+	}
 	tunnel := api.TunnelFromVPN(vpn)
 
 	return tunnel.MarshalMsg(nil)
 }
 
 func processCreateRequest(cfg *Config, data *api.CreateRequestData) (msgp.Raw, error) {
-	vpn, err := pivpn.LoadVpnWithLocations(
-		cfg.PiVPNConfig.Name,
-		cfg.PiVPNConfig.ConfigFilePath,
-		cfg.PiVPNConfig.TunnelDirectory,
-		cfg.PiVPNConfig.ConfigsDirectory,
-		cfg.PiVPNConfig.KeysDirectory,
-	)
+	vpn, err := loadVpn(cfg)
 	if err != nil {
-		log.Printf("unable to load VPN: %s", err)
 		return nil, err
 	}
 
@@ -114,15 +117,8 @@ func processCreateRequest(cfg *Config, data *api.CreateRequestData) (msgp.Raw, e
 }
 
 func processDeleteRequest(cfg *Config, data *api.DeleteRequestData) (msgp.Raw, error) {
-	vpn, err := pivpn.LoadVpnWithLocations(
-		cfg.PiVPNConfig.Name,
-		cfg.PiVPNConfig.ConfigFilePath,
-		cfg.PiVPNConfig.TunnelDirectory,
-		cfg.PiVPNConfig.ConfigsDirectory,
-		cfg.PiVPNConfig.KeysDirectory,
-	)
+	vpn, err := loadVpn(cfg)
 	if err != nil {
-		log.Printf("unable to load VPN: %s", err)
 		return nil, err
 	}
 
@@ -131,15 +127,8 @@ func processDeleteRequest(cfg *Config, data *api.DeleteRequestData) (msgp.Raw, e
 }
 
 func processEnableRequest(cfg *Config, data *api.EnableRequestData) (msgp.Raw, error) {
-	vpn, err := pivpn.LoadVpnWithLocations(
-		cfg.PiVPNConfig.Name,
-		cfg.PiVPNConfig.ConfigFilePath,
-		cfg.PiVPNConfig.TunnelDirectory,
-		cfg.PiVPNConfig.ConfigsDirectory,
-		cfg.PiVPNConfig.KeysDirectory,
-	)
+	vpn, err := loadVpn(cfg)
 	if err != nil {
-		log.Printf("unable to load VPN: %s", err)
 		return nil, err
 	}
 
@@ -148,15 +137,8 @@ func processEnableRequest(cfg *Config, data *api.EnableRequestData) (msgp.Raw, e
 }
 
 func processDisableRequest(cfg *Config, data *api.DisableRequestData) (msgp.Raw, error) {
-	vpn, err := pivpn.LoadVpnWithLocations(
-		cfg.PiVPNConfig.Name,
-		cfg.PiVPNConfig.ConfigFilePath,
-		cfg.PiVPNConfig.TunnelDirectory,
-		cfg.PiVPNConfig.ConfigsDirectory,
-		cfg.PiVPNConfig.KeysDirectory,
-	)
+	vpn, err := loadVpn(cfg)
 	if err != nil {
-		log.Printf("unable to load VPN: %s", err)
 		return nil, err
 	}
 

@@ -6,6 +6,7 @@ import (
 	"io/fs"
 	"net/netip"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -35,6 +36,10 @@ type Vpn struct {
 	tunnelFilePath string
 	configsDir     string
 	keysDir        string
+	ReloadCmds     struct {
+		Pihole []string
+		Wg     []string
+	}
 
 	lock sync.Mutex
 
@@ -118,32 +123,41 @@ func LoadVpnWithLocations(name, pivpnSetupVars, tunnelDir, configsDir, KeysDir s
 	return &vpn, nil
 }
 
-func (t *Vpn) Name() string {
-	return t.Server.Name
+func (v *Vpn) SetReloadCmds(pihole, wg []string) {
+	v.ReloadCmds.Pihole = pihole
+	v.ReloadCmds.Wg = wg
 }
 
-func (t *Vpn) SyncTunnel() error {
-	err := os.WriteFile(t.tunnelFilePath, []byte(t.Server.Export()), 0640)
+func (v *Vpn) Name() string {
+	return v.Server.Name
+}
+
+func (v *Vpn) SyncTunnel() error {
+	err := os.WriteFile(v.tunnelFilePath, []byte(v.Server.Export()), 0640)
 	if err != nil {
 		return err
 	}
-	// todo reload config in wg
+
+	err = exec.Command(v.ReloadCmds.Wg[0], v.ReloadCmds.Wg[1:]...).Run()
+	if err != nil {
+		return err
+	}
 	return nil
 }
 
-func (t *Vpn) SyncClients() error {
+func (v *Vpn) SyncClients() error {
 	// todo rewrite the clients .conf files
-	return os.WriteFile(filepath.Join(t.configsDir, "clients.txt"), []byte(t.Clients.ToClientInfoList().Export()), 0644)
+	return os.WriteFile(filepath.Join(v.configsDir, "clients.txt"), []byte(v.Clients.ToClientInfoList().Export()), 0644)
 }
 
-func (t *Vpn) SyncPihole() error {
+func (v *Vpn) SyncPihole() error {
 	if _, err := os.Stat(DefaultPiholeHostFilePath); os.IsNotExist(err) {
 		return nil
 	}
 	var builder strings.Builder
 
-	_, _ = fmt.Fprintf(&builder, "%s %s.pivpn\n", t.Server.Interface.Addresses[0].Addr().String(), "pivpn")
-	for _, client := range t.Clients {
+	_, _ = fmt.Fprintf(&builder, "%s %s.pivpn\n", v.Server.Interface.Addresses[0].Addr().String(), "pivpn")
+	for _, client := range v.Clients {
 		_, _ = fmt.Fprintf(&builder, "%s %s.pivpn\n", client.Interface.Addresses[0].Addr().String(), client.DNSName())
 	}
 
@@ -151,93 +165,97 @@ func (t *Vpn) SyncPihole() error {
 	if err != nil {
 		return err
 	}
-	// todo reload pihole
+
+	err = exec.Command(v.ReloadCmds.Pihole[0], v.ReloadCmds.Pihole[1:]...).Run()
+	if err != nil {
+		return err
+	}
 	return nil
 }
 
-func (t *Vpn) DisableClient(name string) error {
-	t.lock.Lock()
-	defer t.lock.Unlock()
+func (v *Vpn) DisableClient(name string) error {
+	v.lock.Lock()
+	defer v.lock.Unlock()
 
-	err := t.Server.DisablePeer(name)
+	err := v.Server.DisablePeer(name)
 	if err != nil {
 		return err
 	}
 
-	for i, clients := range t.Clients {
+	for i, clients := range v.Clients {
 		if clients.Name == name {
-			t.Clients[i].Disabled = true
+			v.Clients[i].Disabled = true
 		}
 	}
 
-	return t.SyncTunnel()
+	return v.SyncTunnel()
 }
 
-func (t *Vpn) EnableClient(name string) error {
-	t.lock.Lock()
-	defer t.lock.Unlock()
+func (v *Vpn) EnableClient(name string) error {
+	v.lock.Lock()
+	defer v.lock.Unlock()
 
-	err := t.Server.EnablePeer(name)
+	err := v.Server.EnablePeer(name)
 	if err != nil {
 		return err
 	}
 
-	for i, clients := range t.Clients {
+	for i, clients := range v.Clients {
 		if clients.Name == name {
-			t.Clients[i].Disabled = false
+			v.Clients[i].Disabled = false
 		}
 	}
 
-	return t.SyncTunnel()
+	return v.SyncTunnel()
 }
 
-func (t *Vpn) RemoveClient(name string) error {
-	t.lock.Lock()
-	defer t.lock.Unlock()
+func (v *Vpn) RemoveClient(name string) error {
+	v.lock.Lock()
+	defer v.lock.Unlock()
 
 	// remove peer from tunnel
-	err := t.Server.RemovePeer(name)
+	err := v.Server.RemovePeer(name)
 	if err != nil {
 		return err
 	}
 
 	// update running config
-	err = t.SyncTunnel()
+	err = v.SyncTunnel()
 	if err != nil {
 		return err
 	}
 
 	// remove client from client list if present
-	for i, c := range t.Clients {
+	for i, c := range v.Clients {
 		if c.Name == name {
-			t.Clients = append(t.Clients[:i], t.Clients[i+1:]...)
+			v.Clients = append(v.Clients[:i], v.Clients[i+1:]...)
 			break
 		}
 	}
 
-	err = t.SyncClients()
+	err = v.SyncClients()
 	if err != nil {
 		return err
 	}
 
-	err = os.Remove(filepath.Join(t.configsDir, name+".conf"))
+	err = os.Remove(filepath.Join(v.configsDir, name+".conf"))
 	if err != nil && !os.IsNotExist(err) {
 		return IoError{err, name + ".conf"}
 	}
 
-	err = os.Remove(filepath.Join(t.Conf.UserConfigPath, name+".conf"))
+	err = os.Remove(filepath.Join(v.Conf.UserConfigPath, name+".conf"))
 	if err != nil && !os.IsNotExist(err) {
 		return IoError{err, name + ".conf"}
 	}
 
 	for _, f := range []string{name + "_priv", name + "_psk", name + "_pub"} {
-		err = os.Remove(filepath.Join(t.keysDir, f))
+		err = os.Remove(filepath.Join(v.keysDir, f))
 		if err != nil && !os.IsNotExist(err) {
 			return IoError{err, f}
 		}
 	}
 
-	err = t.SyncPihole()
+	err = v.SyncPihole()
 	if err != nil {
 		return err
 	}
@@ -253,7 +271,7 @@ var (
 	ipv6All = netip.MustParsePrefix("::0/0")
 )
 
-func (t *Vpn) AddClient(name string) error {
+func (v *Vpn) AddClient(name string) error {
 	// enforce peer name restrictions on addition, accept anything for all other options
 	if !clientNameRE.MatchString(name) {
 		return fmt.Errorf("invalid client name %q: name must only contains alphanumerical, period, @, underscore, and hyphen; and be between 1 and 15 characters", name)
@@ -264,10 +282,10 @@ func (t *Vpn) AddClient(name string) error {
 	if name == "server" {
 		return fmt.Errorf("invalid client name %q: client name must not match %q", name, "server")
 	}
-	t.lock.Lock()
-	defer t.lock.Unlock()
+	v.lock.Lock()
+	defer v.lock.Unlock()
 
-	for _, c := range t.Clients {
+	for _, c := range v.Clients {
 		if c.Name == name {
 			return ErrClientExists
 		}
@@ -277,10 +295,10 @@ func (t *Vpn) AddClient(name string) error {
 	keys := NewKeys(name)
 
 	// find next usable IP
-	netblock := t.Server.Interface.Addresses[0]
+	netblock := v.Server.Interface.Addresses[0]
 
-	ips := make(map[netip.Addr]bool, len(t.Clients))
-	for _, client := range t.Clients {
+	ips := make(map[netip.Addr]bool, len(v.Clients))
+	for _, client := range v.Clients {
 		ips[client.Interface.Addresses[0].Addr()] = true
 	}
 	// get first address after the server's IP
@@ -304,17 +322,17 @@ func (t *Vpn) AddClient(name string) error {
 			Interface: wireguard.Interface{
 				PrivateKey: keys.PrivateKey,
 				Addresses:  []netip.Prefix{netip.PrefixFrom(ip, netblock.Bits())},
-				DNS:        t.Conf.DNS[:],
+				DNS:        v.Conf.DNS[:],
 			},
 			Peers: []wireguard.Peer{
 				{
-					PublicKey:    *t.Server.Interface.PrivateKey.Public(),
+					PublicKey:    *v.Server.Interface.PrivateKey.Public(),
 					PresharedKey: keys.PresharedKey,
 					AllowedIPs: []netip.Prefix{
 						ipv4All,
 						ipv6All,
 					},
-					Endpoint:            t.Conf.Endpoint,
+					Endpoint:            v.Conf.Endpoint,
 					PersistentKeepalive: 25,
 				},
 			},
@@ -324,7 +342,7 @@ func (t *Vpn) AddClient(name string) error {
 	}
 
 	// save client
-	err := os.WriteFile(filepath.Join(t.configsDir, name+".conf"), []byte(client.Export()), 0640)
+	err := os.WriteFile(filepath.Join(v.configsDir, name+".conf"), []byte(client.Export()), 0640)
 	if err != nil {
 		return err
 	}
@@ -340,19 +358,19 @@ func (t *Vpn) AddClient(name string) error {
 		}
 		return nil
 	}
-	if err = saveKey(keys.PrivateKey.String(), filepath.Join(t.keysDir, name+"_priv")); err != nil {
+	if err = saveKey(keys.PrivateKey.String(), filepath.Join(v.keysDir, name+"_priv")); err != nil {
 		return err
 	}
-	if err = saveKey(keys.PrivateKey.Public().String(), filepath.Join(t.keysDir, name+"_pub")); err != nil {
+	if err = saveKey(keys.PrivateKey.Public().String(), filepath.Join(v.keysDir, name+"_pub")); err != nil {
 		return err
 	}
-	if err = saveKey(keys.PresharedKey.String(), filepath.Join(t.keysDir, name+"_psk")); err != nil {
+	if err = saveKey(keys.PresharedKey.String(), filepath.Join(v.keysDir, name+"_psk")); err != nil {
 		return err
 	}
 
-	t.Clients = append(t.Clients, client)
+	v.Clients = append(v.Clients, client)
 
-	err = t.SyncClients()
+	err = v.SyncClients()
 	if err != nil {
 		return err
 	}
@@ -360,24 +378,24 @@ func (t *Vpn) AddClient(name string) error {
 	// add client to tunnel
 	clientPeer := client.ToPeer()
 	clientPeer.PresharedKey = keys.PresharedKey
-	t.Server.Peers = append(t.Server.Peers, clientPeer)
+	v.Server.Peers = append(v.Server.Peers, clientPeer)
 
 	// save tunnel
-	err = t.SyncTunnel()
+	err = v.SyncTunnel()
 	if err != nil {
 		return err
 	}
 
-	err = t.SyncPihole()
+	err = v.SyncPihole()
 	if err != nil {
 		return err
 	}
 
-	err = ensureDir(t.Conf.UserConfigPath, t.Conf.UserId, t.Conf.GroupId)
+	err = ensureDir(v.Conf.UserConfigPath, v.Conf.UserId, v.Conf.GroupId)
 	if err != nil {
 		return err
 	}
-	err = os.WriteFile(filepath.Join(t.Conf.UserConfigPath, name+".conf"), []byte(client.Export()), 0640)
+	err = os.WriteFile(filepath.Join(v.Conf.UserConfigPath, name+".conf"), []byte(client.Export()), 0640)
 	if err != nil {
 		return err
 	}

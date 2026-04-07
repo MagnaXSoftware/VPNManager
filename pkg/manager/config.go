@@ -29,6 +29,9 @@ type PiVPNConfig struct {
 	TunnelDirectory  string `hcl:"tunnel_dir,optional"`
 	ConfigsDirectory string `hcl:"configs_dir,optional"`
 	KeysDirectory    string `hcl:"keys_dir,optional"`
+
+	ReloadPiholeCmd []string `hcl:"reload_cmd_pihole,optional"`
+	ReloadWgCmd []string `hcl:"reload_cmd_wg,optional"`
 }
 
 type Timeouts struct {
@@ -44,6 +47,8 @@ func DefaultConfig() (*Config, error) {
 			TunnelDirectory:  pivpn.DefaultTunnelDir,
 			ConfigsDirectory: pivpn.DefaultConfigsDir,
 			KeysDirectory:    pivpn.DefaultKeysFilePath,
+			ReloadPiholeCmd:  []string{"/usr/local/bin/pihole", "reloadlists"},
+			ReloadWgCmd:      []string{"systemctl", "reload", "wg-quick@wg0"},
 		},
 		Timeouts: &Timeouts{
 			MinRetryIntervalMS: 100,
