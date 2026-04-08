@@ -88,7 +88,7 @@ func NewServer(ctx context.Context, cfg *Config) *Server {
 	})
 
 	proxiedMiddleware := ForwardedMiddleware(cfg)
-	srv.srv.Handler = RecoverPanicMiddleware(SetSchemeMiddleware(proxiedMiddleware(RequestLoggingMiddleware(mux))))
+	srv.srv.Handler = RecoverPanicMiddleware(SetSchemeMiddleware(proxiedMiddleware(RequestLoggingMiddleware(SetServerMiddleware(mux)))))
 
 	return srv
 }

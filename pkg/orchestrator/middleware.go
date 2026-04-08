@@ -13,6 +13,8 @@ import (
 
 	"github.com/zitadel/oidc/v3/pkg/client/rp"
 	"github.com/zitadel/oidc/v3/pkg/oidc"
+
+	"magnax.ca/VPNManager/internal/version"
 )
 
 var (
@@ -293,6 +295,13 @@ func SetSchemeMiddleware(h http.Handler) http.Handler {
 		}
 		r.URL.Scheme = scheme
 
+		h.ServeHTTP(w, r)
+	})
+}
+
+func SetServerMiddleware(h http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Server", fmt.Sprintf("%s %s (%s)", "VPNManager-Orchestrator", version.RawVersion(), version.RawCommit()))
 		h.ServeHTTP(w, r)
 	})
 }
