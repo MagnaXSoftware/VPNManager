@@ -25,7 +25,7 @@
                 <tbody>
                 {{ range $name, $tunnel := .Tunnels }}
                     <tr class="tunnel_row">
-                    <td rowspan="{{ len $tunnel.Clients }}"><a
+                    <td rowspan="{{ max (len $tunnel.Clients) 1 }}"><a
                                 href="/tunnel/{{ $name }}">{{ $name }}</a><br><code>{{ $tunnel.Endpoint.String }}</code></td>
                     {{ range $i, $client := $tunnel.Clients }}
                         {{ if $i }}
@@ -33,6 +33,8 @@
                             <tr>
                         {{ end }}
                         <td><a href="/tunnel/{{ $name }}/{{ $client.Name }}">{{ $client.Name }}</a>{{ if $client.Disabled }} <small class="muted">(DISABLED)</small>{{ end }}</td>
+                    {{ else }}
+                        <td></td>
                     {{ end }}
                     </tr>
                 {{ end }}

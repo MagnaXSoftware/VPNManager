@@ -48,11 +48,16 @@ func join(sep string, vals ...string) string {
 	return strings.Join(vals, sep)
 }
 
+func maxInts(x, y int) int {
+	return max(x, y)
+}
+
 func NewStdlibEngine() (Engine, error) {
 	// wrap with custom: Stat,
 	tmplts, err := template.New("").Funcs(template.FuncMap{
 		"crumbs": crumbs,
 		"join":   join,
+		"max":    maxInts,
 	}).ParseFS(TemplatesFS, "*.html.tpl")
 	if err != nil {
 		return nil, err
