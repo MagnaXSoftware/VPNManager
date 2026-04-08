@@ -145,6 +145,7 @@ func OIDCSSOMiddleware(ctx context.Context, cfg *OIDCConfig, errorHandler func(h
 				UpdateSessionId(w, ctx, session)
 
 				http.Redirect(w, r, state, http.StatusFound)
+				return
 			}
 
 			http.Redirect(w, r, rp.AuthURL(r.URL.Path, oidcRP), http.StatusFound)

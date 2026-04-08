@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"log"
 	"log/slog"
 	"net"
 	"net/http"
@@ -44,13 +43,17 @@ func NewServer(ctx context.Context, cfg *Config) *Server {
 	mux := http.NewServeMux()
 	engine, err := web.NewStdlibEngine()
 	if err != nil {
-		log.Printf("orchestrator: failed to initialize template engine: %v", err)
+		slog.Error("failed to initialize template engine", "err", err)
 		return nil
 	}
 
+	httpLogger := slog.Default().WithGroup("http")
+	httpLogger.Handler()
+
 	srv := &Server{
 		srv: &http.Server{
-			Addr: cfg.Address,
+			Addr:     cfg.Address,
+			ErrorLog: slog.NewLogLogger(httpLogger.Handler(), slog.LevelInfo),
 		},
 		cfg:   cfg,
 		cache: cache,
@@ -118,6 +121,7 @@ func (s *Server) ListenAndServe(ctx context.Context) error {
 		return ctx
 	}
 
+	slog.Info("starting server", "addr", s.srv.Addr)
 	err := s.srv.ListenAndServe()
 	wg.Wait()
 	if errors.Is(err, http.ErrServerClosed) {

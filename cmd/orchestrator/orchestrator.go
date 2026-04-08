@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"fmt"
-	"log"
 	"log/slog"
 	"os"
 	"os/signal"
@@ -33,7 +32,7 @@ func CmdDaemon(ctx context.Context, cmd *cli.Command) error {
 	for {
 		select {
 		case <-ctx.Done():
-			log.Println("Shutting down...")
+			slog.Info("Shutting down...")
 			return nil
 		default:
 			err := func() error {
@@ -41,6 +40,7 @@ func CmdDaemon(ctx context.Context, cmd *cli.Command) error {
 				if err != nil {
 					return err
 				}
+				slog.Info("parsed configuration", "path", configFilePath)
 
 				srvCtx, interuptCancel := signal.NotifyContext(ctx, syscall.SIGHUP)
 				defer interuptCancel()
@@ -59,7 +59,7 @@ func CmdDaemon(ctx context.Context, cmd *cli.Command) error {
 			// If SIGHUP, ctx.Done() is not closed so Err() is nil and
 			// we'll land back in this case which will restart the server :)
 			if ctx.Err() == nil {
-				log.Printf("received HUP, reloading config")
+				slog.Info("received HUP, reloading config")
 			}
 		}
 	}
