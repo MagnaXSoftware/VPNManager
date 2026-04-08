@@ -26,6 +26,10 @@ table {
     border-collapse: collapse;
 }
 
+.tunnel_row {
+    border-top: 1px solid #cbcbcb;
+}
+
 #clients table form {
     margin: 0 auto;
     width: fit-content;
