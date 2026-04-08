@@ -26,14 +26,14 @@ type SessionStore struct {
 	store []*Session
 }
 
-func SessionStoreFromContext(ctx context.Context) *SessionStore {
+func SessionStoreFromCtx(ctx context.Context) *SessionStore {
 	if session, ok := ctx.Value(SessionStoreCtxKey).(*SessionStore); ok {
 		return session
 	}
 	panic(errors.New("SessionStore not found in context"))
 }
 
-func SessionFromContext(ctx context.Context) *Session {
+func SessionFromCtx(ctx context.Context) *Session {
 	if session, ok := ctx.Value(SessionCtxKey).(*Session); ok {
 		return session
 	}
@@ -167,6 +167,7 @@ type Session struct {
 	Duration time.Duration
 	LastSeen time.Time
 	Tokens   *oidc.Tokens[*oidc.IDTokenClaims]
+	UserInfo *oidc.UserInfo
 }
 
 func (s *Session) RegenerateId() {
@@ -189,9 +190,29 @@ func (s *Session) RefreshTokens(ctx context.Context, relParty rp.RelyingParty) {
 	if err != nil {
 		return
 	}
+	logger := LoggerFromCtx(ctx)
+	logger.Info("refreshed tokens", "user", s.user())
 
 	if newTokens.RefreshToken == "" {
 		newTokens.RefreshToken = s.Tokens.RefreshToken
 	}
 	s.Tokens = newTokens
+}
+
+func (s *Session) user() (u string) {
+	defer func() {
+		if r := recover(); r != nil {
+			u = ""
+		}
+	}()
+
+	return s.Tokens.IDTokenClaims.PreferredUsername
+}
+
+func (s *Session) User() string {
+	if !s.IsAuth() {
+		return ""
+	}
+
+	return s.user()
 }

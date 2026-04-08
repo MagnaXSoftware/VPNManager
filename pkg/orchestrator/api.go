@@ -2,7 +2,6 @@ package orchestrator
 
 import (
 	"context"
-	"log/slog"
 	"net/http"
 	"strings"
 	"time"
@@ -18,52 +17,61 @@ type managerApi struct {
 }
 
 func (m *managerApi) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	logger := LoggerFromCtx(r.Context())
 	c, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
-		slog.Error("unable to upgrade", "err", err)
+		logger.Error("unable to upgrade", "err", err)
 		return
 	}
 	defer c.Close() //nolint:errcheck
 
 	t, msg, err := c.ReadMessage()
 	if err != nil {
-		slog.Error("read error", "err", err)
+		logger.Error("read error", "err", err)
 		return
 	}
 	if t != websocket.TextMessage {
 		_ = sendConnectionClose(c, websocket.CloseUnsupportedData)
-		slog.Error("expected text message")
+		logger.Error("expected text message")
 		return
 	}
 	helloMsg := string(msg)
 	parts := strings.Split(helloMsg, " ")
 
 	if len(parts) != 3 {
-		slog.Error("invalid HELLO msg", "message", helloMsg, "parts", parts)
+		logger.Error("invalid HELLO msg", "message", helloMsg, "parts", parts)
 		return
 	} else if parts[0] != "HELLO" {
-		slog.Error("invalid HELLO msg", "message", helloMsg, "greeting", parts[0])
+		logger.Error("invalid HELLO msg", "message", helloMsg, "greeting", parts[0])
 		return
 	}
 
-	slog.Info("new connection", "name", parts[2])
+	logger = logger.With("name", parts[2])
+	logger.Info("new connection")
 
-	ctx := r.Context()
+	ctx := CtxWithLogger(r.Context(), logger)
 
 	switch parts[1] {
 	case "0":
 		resp, err := sendV1Request(c, api.Request{Type: api.UpdateRequest})
 		if err != nil {
-			slog.Error("status error", "err", err)
+			logger.Error("status error", "err", err)
 			return
 		}
 		if resp.Status != api.StatusOk {
-			slog.Error("status error", "err", resp.Err)
+			logger.Error("status error", "err", resp.Err)
 			_ = sendConnectionClose(c, websocket.ClosePolicyViolation)
 			return
 		}
-		processV1Update(m.cache, parts[2], resp.Data)
-		m.manageV1Conn(ctx, parts[2], c)
+		err = processV1Update(m.cache, parts[2], resp.Data)
+		if err != nil {
+			logger.Error("couldn't unmarshal update", "err", err)
+			_ = sendConnectionClose(c, websocket.ClosePolicyViolation)
+			return
+		}
+		logger.Info("handshake completed", "version", parts[1])
+		code := m.manageV1Conn(ctx, parts[2], c)
+		_ = sendConnectionClose(c, code)
 	}
 }
 
@@ -71,11 +79,12 @@ func sendConnectionClose(conn *websocket.Conn, code int) error {
 	return conn.WriteMessage(websocket.CloseMessage, websocket.FormatCloseMessage(code, ""))
 }
 
-func (m *managerApi) manageV1Conn(ctx context.Context, name string, c *websocket.Conn) {
+func (m *managerApi) manageV1Conn(ctx context.Context, name string, c *websocket.Conn) int {
+	logger := LoggerFromCtx(ctx)
 	// register connection for this manager
 	actionReq, err := m.cache.Register(name)
 	if err != nil {
-		return
+		return websocket.CloseGoingAway
 	}
 	defer m.cache.Unregister(name)
 
@@ -84,18 +93,16 @@ func (m *managerApi) manageV1Conn(ctx context.Context, name string, c *websocket
 	for {
 		select {
 		case <-ctx.Done():
-			_ = sendConnectionClose(c, websocket.CloseGoingAway)
-			return
+			return websocket.CloseGoingAway
 		case req := <-actionReq:
 			resp, err := sendV1Request(c, req.Request)
 			if err != nil {
-				slog.Error("error sending request", "type", req.Request.Type, "err", err)
+				logger.Error("error sending request", "type", req.Request.Type, "err", err)
 				req.Response <- api.Response{
 					Status: api.StatusReqErr,
 					Err:    err.Error(),
 				}
-				_ = sendConnectionClose(c, websocket.CloseProtocolError)
-				return
+				return websocket.CloseProtocolError
 			}
 
 			req.Response <- *resp
@@ -104,16 +111,19 @@ func (m *managerApi) manageV1Conn(ctx context.Context, name string, c *websocket
 		case <-updateReqTicker.C:
 			resp, err := sendV1Request(c, api.Request{Type: api.UpdateRequest})
 			if err != nil {
-				slog.Error("status request error", "err", err)
-				_ = sendConnectionClose(c, websocket.CloseProtocolError)
-				return
+				logger.Error("status request error", "err", err)
+				return websocket.CloseProtocolError
 			}
 			switch resp.Status {
 			case api.StatusOk:
-				processV1Update(m.cache, name, resp.Data)
+				err = processV1Update(m.cache, name, resp.Data)
+				if err != nil {
+					logger.Error("unable to process update", "err", err)
+					return websocket.CloseProtocolError
+				}
 			case api.StatusErr:
-				slog.Error("error from manager", "err", resp.Err)
-				return
+				logger.Error("error from manager", "err", resp.Err)
+				return websocket.CloseProtocolError
 			case api.StatusReqErr:
 				panic("sendV1Request should not generate StatusReqErr")
 			}
@@ -148,12 +158,12 @@ func sendV1Request(c *websocket.Conn, r api.Request) (*api.Response, error) {
 	return resp, nil
 }
 
-func processV1Update(cache *Cache, name string, data []byte) {
+func processV1Update(cache *Cache, name string, data []byte) error {
 	tunnel := &api.Tunnel{}
 	_, err := tunnel.UnmarshalMsg(data)
 	if err != nil {
-		slog.Error("couldn't unmarshal update", "err", err)
-		return
+		return err
 	}
 	cache.InsertTunnel(name, tunnel)
+	return nil
 }

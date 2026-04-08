@@ -15,10 +15,6 @@ import (
 	"github.com/zitadel/oidc/v3/pkg/oidc"
 )
 
-type CtxKey struct {
-	name string
-}
-
 var (
 	OriginalAddrCtxKey = &CtxKey{"original-addr"}
 )
@@ -93,7 +89,7 @@ func OIDCSSOMiddleware(ctx context.Context, cfg *OIDCConfig, errorHandler func(h
 		cfg.ClientID,
 		cfg.ClientSecret,
 		cfg.RawCallbackUrl,
-		[]string{"openid", "offline_access"},
+		[]string{oidc.ScopeOpenID, oidc.ScopeOfflineAccess, oidc.ScopeProfile},
 		rp.WithLogger(ssoLogger),
 		rp.WithSigningAlgsFromDiscovery(),
 	)
@@ -101,22 +97,26 @@ func OIDCSSOMiddleware(ctx context.Context, cfg *OIDCConfig, errorHandler func(h
 		return nil, err
 	}
 
-	// we use Must here because the config parse already checks
+	// we use Must here because the config parses the URL which ensures it's parseable
 	callbackUrl := Must(url.Parse(cfg.RawCallbackUrl))
 
 	return func(h http.Handler) http.Handler {
 		processTokens := func(ctx context.Context, session *Session, tokens *oidc.Tokens[*oidc.IDTokenClaims], userinfo *oidc.UserInfo) {
 			session.Tokens = tokens
+			session.UserInfo = userinfo
 			session.RegenerateId()
 		}
 
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			ctx := r.Context()
-			session := SessionFromContext(ctx)
+			session := SessionFromCtx(ctx)
 
 			session.RefreshTokens(ctx, oidcRP)
 
 			if session.IsAuth() {
+				logger := LoggerFromCtx(ctx).With("user", session.User())
+				ctx = CtxWithLogger(ctx, logger)
+				r = r.WithContext(ctx)
 				h.ServeHTTP(w, r)
 				return
 			}
@@ -188,7 +188,7 @@ func BearerAuthMiddleware(tokens ...string) Middleware {
 	}
 }
 
-func LoggingMiddleware(h http.Handler) http.Handler {
+func RequestLoggingMiddleware(h http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		reqAttr := slog.Group("req",
 			"method", r.Method,
@@ -207,7 +207,7 @@ func LoggingMiddleware(h http.Handler) http.Handler {
 				"addr", r.RemoteAddr,
 			)
 		}
-		slog.Info("received request", reqAttr, remoteAttr)
+		LoggerFromCtx(r.Context()).Info("received request", reqAttr, remoteAttr)
 		h.ServeHTTP(w, r)
 	})
 }
