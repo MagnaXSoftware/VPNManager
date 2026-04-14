@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -297,6 +298,12 @@ func (s *Server) httpGetTunnelClientQR(w http.ResponseWriter, r *http.Request) {
 	}
 
 	size := -5
+	if fs := r.FormValue("size"); fs != "" {
+		if s, err := strconv.ParseInt(fs, 10, 0); err == nil {
+			size = int(s)
+		}
+	}
+
 	w.Header().Set("Content-Type", "image/png")
 	w.WriteHeader(http.StatusOK)
 	_ = client.WriteQrCode(w, size)
