@@ -15,7 +15,7 @@
     {{ template "breadcrumbs" (crumbs "Tunnels" "/tunnels" .TunnelName (join "" "/tunnel/" .TunnelName) .Client.Name nil) }}
 
     <div class="grid">
-        <div class="col">
+        <div class="col config">
             <div>
                 <pre><code>{{ .Client.Export }}</code></pre>
             </div>
@@ -35,11 +35,12 @@
                 </div>
                 <div class="col">
                     <form action="/tunnel/{{ .TunnelName }}/{{ .Client.Name }}/remove" method="POST"
-                          class="pure-form"><input type="submit" value="Remove" class="pure-button button-error"></form>
+                          class="pure-form"><input type="submit" value="Remove" class="pure-button button-error">
+                    </form>
                 </div>
             </div>
         </div>
-        <div class="col">
+        <div class="col first">
             <img src="/tunnel/{{ .TunnelName }}/{{ .Client.Name }}/qr.png"
                  alt="configuration QR code for {{ .Client.Name }}">
         </div>

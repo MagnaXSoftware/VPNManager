@@ -9,14 +9,24 @@
 
 .grid {
     display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
     justify-content: space-between;
-    margin-left: -1em;
-    margin-right: -1em;
 }
+
 
 .col {
     flex: 1;
-    padding: 1em 0 0 1em;
+}
+
+@media screen and (max-width: 65rem) {
+    .col.first {
+        order: -1;
+    }
+}
+
+.config {
+    max-width: 46rem;
 }
 
 table {

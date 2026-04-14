@@ -16,10 +16,10 @@
 
 
     <div class="grid">
-        <div class="col">
+        <div class="col config">
             <pre><code>{{ .Tunnel.Server.Export }}</code></pre>
         </div>
-        <div class="col">
+        <div class="col first">
             {{ $tunnelName := .TunnelName -}}
             <div id="add">
                 <form action="/tunnel/{{ $tunnelName }}/create" method="POST" class="pure-form">
