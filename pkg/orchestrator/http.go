@@ -296,9 +296,10 @@ func (s *Server) httpGetTunnelClientQR(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	size := -5
 	w.Header().Set("Content-Type", "image/png")
 	w.WriteHeader(http.StatusOK)
-	_ = client.WriteQrCode(w)
+	_ = client.WriteQrCode(w, size)
 }
 
 func (s *Server) httpPOSTTunnelClientEnable(w http.ResponseWriter, r *http.Request) {

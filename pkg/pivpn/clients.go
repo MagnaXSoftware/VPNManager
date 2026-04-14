@@ -53,12 +53,12 @@ func (c *Client) ToPeer() wireguard.Peer {
 	}
 }
 
-func (c *Client) WriteQrCode(w io.Writer) error {
+func (c *Client) WriteQrCode(w io.Writer, size int) error {
 	img, err := qrcode.New(c.Export(), qrcode.High)
 	if err != nil {
 		return err
 	}
-	return img.Write(512, w)
+	return img.Write(size, w)
 }
 
 func (c *ClientList) ToClientInfoList() ClientInfoList {
