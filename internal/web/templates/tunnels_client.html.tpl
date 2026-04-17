@@ -21,6 +21,9 @@
             </div>
             <div class="grid text-center">
                 <div class="col">
+                    <a class="pure-button button-success" href="/tunnel/{{ .TunnelName }}/{{ .Client.Name }}/conf">Download Config</a>
+                </div>
+                <div class="col">
                     {{ if .Client.Disabled -}}
                         <form action="/tunnel/{{ .TunnelName }}/{{ .Client.Name }}/enable" method="POST"
                               class="pure-form"><input type="hidden" name="next"

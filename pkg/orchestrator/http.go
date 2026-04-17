@@ -101,6 +101,7 @@ func (s *Server) loadRoutes() http.Handler {
 	mux.HandleFunc("GET /tunnels", s.httpGetTunnels)
 	mux.HandleFunc("GET /tunnel/{name}", s.httpGetTunnel)
 	mux.HandleFunc("GET /tunnel/{name}/{client}", s.httpGetTunnelClient)
+	mux.HandleFunc("GET /tunnel/{name}/{client}/conf", s.httpGetTunnelClientFile)
 	mux.HandleFunc("GET /tunnel/{name}/{client}/qr.png", s.httpGetTunnelClientQR)
 	mux.HandleFunc("POST /tunnel/{name}/create", s.httpPOSTTunnelClientCreate)
 	mux.HandleFunc("POST /tunnel/{name}/{client}/enable", s.httpPOSTTunnelClientEnable)
@@ -276,6 +277,36 @@ func (s *Server) httpGetTunnelClient(w http.ResponseWriter, r *http.Request) {
 	)
 }
 
+func (s *Server) httpGetTunnelClientFile(w http.ResponseWriter, r *http.Request) {
+	tunnelName, tunnel, err := s.loadTunnel(r)
+	if err != nil {
+		if errors.Is(err, ErrTunnelNotFound) {
+			s.serveError(w, http.StatusNotFound, err)
+		} else {
+			s.serveError(w, http.StatusBadRequest, err)
+		}
+		return
+	}
+
+	client, err := s.loadClient(r, tunnel)
+	if err != nil {
+		if errors.Is(err, ErrClientNotFound) {
+			s.serveError(w, http.StatusNotFound, err)
+		} else {
+			s.serveError(w, http.StatusBadRequest, err)
+		}
+		return
+	}
+
+	conf := client.Export()
+
+	h := w.Header()
+	h.Set("Content-Disposition", fmt.Sprintf("attachment; filename=\"%s.conf\"", tunnelName))
+	h.Set("Content-Type", "text/plain; charset=utf-8")
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write([]byte(conf))
+}
+
 func (s *Server) httpGetTunnelClientQR(w http.ResponseWriter, r *http.Request) {
 	_, tunnel, err := s.loadTunnel(r)
 	if err != nil {
@@ -304,7 +335,9 @@ func (s *Server) httpGetTunnelClientQR(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	w.Header().Set("Content-Type", "image/png")
+	h := w.Header()
+	h.Set("Content-Disposition", "inline")
+	h.Set("Content-Type", "image/png")
 	w.WriteHeader(http.StatusOK)
 	_ = client.WriteQrCode(w, size)
 }
