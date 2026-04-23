@@ -82,7 +82,7 @@ font-size: 1em;
 	})
 }
 
-func OIDCSSOMiddleware(ctx context.Context, cfg *OIDCConfig, errorHandler func(http.ResponseWriter, int, error)) (Middleware, error) {
+func NewOIDCSSOAuthMiddleware(ctx context.Context, cfg *OIDCConfig, errorHandler func(http.ResponseWriter, int, error)) (Middleware, error) {
 	ssoLogger := slog.Default().WithGroup("oidc")
 
 	oidcRP, err := rp.NewRelyingPartyOIDC(
@@ -155,7 +155,7 @@ func OIDCSSOMiddleware(ctx context.Context, cfg *OIDCConfig, errorHandler func(h
 	}, nil
 }
 
-func BearerAuthMiddleware(tokens ...string) Middleware {
+func NewBearerAuthMiddleware(tokens ...string) Middleware {
 	return func(h http.Handler) http.Handler {
 		if len(tokens) == 0 {
 			return h
@@ -198,23 +198,44 @@ func RequestLoggingMiddleware(h http.Handler) http.Handler {
 			"host", r.Host,
 			"path", r.URL.Path,
 		)
-		var remoteAttr slog.Attr
+		remoteAttrs := make([]slog.Attr, 2)
+		remoteAttrs[0] = slog.Any("addr", r.RemoteAddr)
 		if val, ok := r.Context().Value(OriginalAddrCtxKey).(string); ok {
-			remoteAttr = slog.Group("remote",
-				"addr", r.RemoteAddr,
-				"orig", val,
-			)
-		} else {
-			remoteAttr = slog.Group("remote",
-				"addr", r.RemoteAddr,
-			)
+			remoteAttrs = append(remoteAttrs, slog.Any("original", val))
 		}
-		LoggerFromCtx(r.Context()).Info("received request", reqAttr, remoteAttr)
+		LoggerFromCtx(r.Context()).Info("received request", reqAttr, slog.GroupAttrs("remote", remoteAttrs...))
 		h.ServeHTTP(w, r)
 	})
 }
 
+var (
+	originalProtoCtxKey = &CtxKey{"original-proto"}
+	originalAddrCtxKey  = &CtxKey{"original-addr"}
+	originalHostCtxKey  = &CtxKey{"original-host"}
+)
+
 type PrefixList []netip.Prefix
+
+func NewPrefixList(prefixes []string) (PrefixList, error) {
+	trustedRanges := make(PrefixList, 0, len(prefixes))
+	for _, proxyStr := range prefixes {
+		if strings.Contains(proxyStr, "/") {
+			prefix, err := netip.ParsePrefix(proxyStr)
+			if err != nil {
+				return nil, err
+			}
+			trustedRanges = append(trustedRanges, prefix)
+		} else {
+			addr, err := netip.ParseAddr(proxyStr)
+			if err != nil {
+				return nil, err
+			}
+			trustedRanges = append(trustedRanges, netip.PrefixFrom(addr, addr.BitLen()))
+		}
+	}
+
+	return trustedRanges, nil
+}
 
 func (p PrefixList) Contains(ip netip.Addr) bool {
 	for _, prefix := range p {
@@ -225,32 +246,36 @@ func (p PrefixList) Contains(ip netip.Addr) bool {
 	return false
 }
 
-func ForwardedMiddleware(cfg *Config) Middleware {
+func NewForwardedMiddleware(trustedRanges PrefixList) Middleware {
 	var (
 		XForwardedFor   = http.CanonicalHeaderKey("X-Forwarded-For")
 		XForwardedProto = http.CanonicalHeaderKey("X-Forwarded-Proto")
+		XForwardedHost  = http.CanonicalHeaderKey("X-Forwarded-Host")
 	)
 
-	return func(h http.Handler) http.Handler {
-		if len(cfg.TrustedProxies) == 0 {
+	if len(trustedRanges) == 0 {
+		return func(h http.Handler) http.Handler {
 			return h
 		}
+	}
 
-		trustedRanges := make(PrefixList, 0, len(cfg.TrustedProxies))
-		for _, proxyStr := range cfg.TrustedProxies {
-			if strings.Contains(proxyStr, "/") {
-				trustedRanges = append(trustedRanges, netip.MustParsePrefix(proxyStr))
-			} else {
-				addr := netip.MustParseAddr(proxyStr)
-				trustedRanges = append(trustedRanges, netip.PrefixFrom(addr, addr.BitLen()))
-			}
-		}
-
+	return func(h http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			remoteIp := netip.MustParseAddrPort(r.RemoteAddr)
 			if trustedRanges.Contains(remoteIp.Addr()) {
 				// we can trust the headers
 				header := r.Header
+				ctx := r.Context()
+
+				scheme := r.URL.Scheme
+				if scheme == "" {
+					scheme = "http"
+					if r.TLS != nil {
+						scheme = "https"
+					}
+				}
+				ctx = context.WithValue(ctx, originalProtoCtxKey, scheme)
+				r = r.WithContext(ctx)
 
 				if pr := header.Get(XForwardedProto); pr != "" {
 					switch pr {
@@ -263,7 +288,7 @@ func ForwardedMiddleware(cfg *Config) Middleware {
 					}
 				}
 
-				ctx := context.WithValue(r.Context(), OriginalAddrCtxKey, r.RemoteAddr)
+				ctx = context.WithValue(ctx, originalAddrCtxKey, r.RemoteAddr)
 				r = r.WithContext(ctx)
 
 				if fr := header.Get(XForwardedFor); fr != "" {
@@ -280,6 +305,13 @@ func ForwardedMiddleware(cfg *Config) Middleware {
 							break
 						}
 					}
+				}
+
+				ctx = context.WithValue(ctx, originalHostCtxKey, r.Host)
+				r = r.WithContext(ctx)
+
+				if fh := header.Get(XForwardedHost); fh != "" {
+					r.Host = fh
 				}
 			}
 			h.ServeHTTP(w, r)

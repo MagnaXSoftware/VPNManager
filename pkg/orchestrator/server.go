@@ -62,7 +62,7 @@ func NewServer(ctx context.Context, cfg *Config) *Server {
 	}
 
 	// API
-	mux.Handle("/api/comms/manager", BearerAuthMiddleware(cfg.PSK)(&managerApi{cfg.PollInterval(), cache}))
+	mux.Handle("/api/comms/manager", NewBearerAuthMiddleware(cfg.PSK)(&managerApi{cfg.PollInterval(), cache}))
 
 	// Static
 	mux.Handle("/static/", http.StripPrefix("/static/", http.FileServerFS(web.StaticFS)))
@@ -76,7 +76,7 @@ func NewServer(ctx context.Context, cfg *Config) *Server {
 	if cfg.OAuth == nil {
 		slog.Warn("no SSO configuration was provided, was it forgotten?")
 	} else {
-		sso, err := OIDCSSOMiddleware(ctx, cfg.OAuth, srv.serveError)
+		sso, err := NewOIDCSSOAuthMiddleware(ctx, cfg.OAuth, srv.serveError)
 		if err != nil {
 			slog.Error("unable to setup SSO", "err", err)
 			return nil
@@ -88,8 +88,21 @@ func NewServer(ctx context.Context, cfg *Config) *Server {
 		srv.serveError(w, http.StatusNotFound, errors.New("page not found"))
 	})
 
-	proxiedMiddleware := ForwardedMiddleware(cfg)
-	srv.srv.Handler = RecoverPanicMiddleware(SetSchemeMiddleware(proxiedMiddleware(RequestLoggingMiddleware(SetServerMiddleware(mux)))))
+	prefixes, err := NewPrefixList(cfg.TrustedProxies)
+	if err != nil {
+		slog.Error("unable to initialize prefix list", "err", err, "proxies", cfg.TrustedProxies)
+		return nil
+	}
+	proxiedMiddleware := NewForwardedMiddleware(prefixes)
+	srv.srv.Handler = RecoverPanicMiddleware(
+		SetSchemeMiddleware(
+			proxiedMiddleware(
+				RequestLoggingMiddleware(
+					SetServerMiddleware(mux),
+				),
+			),
+		),
+	)
 
 	return srv
 }
