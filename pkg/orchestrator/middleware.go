@@ -283,6 +283,10 @@ func NewForwardedMiddleware(trustedRanges PrefixList) Middleware {
 						r.URL.Scheme = "http"
 					case "https":
 						r.URL.Scheme = "https"
+					case "ws":
+						r.URL.Scheme = "ws"
+					case "wss":
+						r.URL.Scheme = "wss"
 					default:
 						slog.Warn("unknown X-Forwarded-Proto value", "value", pr)
 					}
