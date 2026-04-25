@@ -48,6 +48,8 @@
                  alt="configuration QR code for {{ .Client.Name }}">
         </div>
     </div>
+
+    <footer>{{ version }}</footer>
 </div>
 </body>
 </html>

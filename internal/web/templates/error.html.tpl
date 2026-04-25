@@ -10,8 +10,12 @@
 <body>
 <div class="page">
     <h1>{{ .Title }}</h1>
+    
     {{ template "breadcrumbs" (crumbs "Tunnels" "/tunnels") }}
+
     <pre>{{ .Message }}</pre>
+
+    <footer>{{ version }}</footer>
 </div>
 </body>
 </html>

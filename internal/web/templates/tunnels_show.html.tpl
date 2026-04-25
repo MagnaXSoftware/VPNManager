@@ -58,6 +58,8 @@
             </div>
         </div>
     </div>
+
+    <footer>{{ version }}</footer>
 </div>
 </body>
 </html>

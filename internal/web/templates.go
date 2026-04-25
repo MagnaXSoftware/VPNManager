@@ -6,6 +6,8 @@ import (
 	"html/template"
 	"io"
 	"strings"
+
+	"magnax.ca/VPNManager/internal/version"
 )
 
 type C map[string]any
@@ -52,12 +54,17 @@ func maxInts(x, y int) int {
 	return max(x, y)
 }
 
+func versionStr() string {
+	return fmt.Sprintf("VPM Manager %s (commit %s)", version.RawVersion(), version.RawCommit())
+}
+
 func NewStdlibEngine() (Engine, error) {
 	// wrap with custom: Stat,
 	tmplts, err := template.New("").Funcs(template.FuncMap{
-		"crumbs": crumbs,
-		"join":   join,
-		"max":    maxInts,
+		"crumbs":  crumbs,
+		"join":    join,
+		"max":     maxInts,
+		"version": versionStr,
 	}).ParseFS(TemplatesFS, "*.html.tpl")
 	if err != nil {
 		return nil, err
