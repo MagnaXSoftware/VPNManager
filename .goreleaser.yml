@@ -54,6 +54,7 @@ builds:
     ldflags: '-s -w -X magnax.ca/VPNManager/internal/version.version={{.Version}} -X magnax.ca/VPNManager/internal/version.commit={{.Commit}} -X magnax.ca/VPNManager/internal/version.date={{.CommitDate}} -X magnax.ca/VPNManager/internal/version.builtBy=goreleaser'
     mod_timestamp: "{{ .CommitTimestamp }}"
   - id: orchestrator-debug
+    skip: true
     main: ./cmd/orchestrator
     binary: vpn-orchestrator-debug
     tags:
@@ -82,8 +83,4 @@ archives:
   - id: orchestrator
     ids:
       - orchestrator
-    formats: ["binary"]
-  - id: orchestrator-debug
-    ids:
-      - orchestrator-debug
     formats: ["binary"]
