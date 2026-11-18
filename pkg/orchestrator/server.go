@@ -72,18 +72,23 @@ func NewServer(ctx context.Context, cfg *Config) *Server {
 	CSRF := http.NewCrossOriginProtection()
 	SS := NewSessionStore()
 
-	h := sub
 	if cfg.OAuth == nil {
 		slog.Warn("no SSO configuration was provided, was it forgotten?")
+		if !cfg.DangerRunWithoutOAuth {
+			return nil
+		}
 	} else {
 		sso, err := NewOIDCSSOAuthMiddleware(ctx, cfg.OAuth, srv.serveError)
 		if err != nil {
 			slog.Error("unable to setup SSO", "err", err)
-			return nil
+			sub = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				srv.serveError(w, http.StatusInternalServerError, errors.New("SSO was not available, the UI is disabled"))
+			})
+		} else {
+			sub = sso(sub)
 		}
-		h = sso(h)
 	}
-	mux.Handle("/", CSRF.Handler(SS.Middleware(h)))
+	mux.Handle("/", CSRF.Handler(SS.Middleware(sub)))
 	mux.HandleFunc("/favicon.ico", func(w http.ResponseWriter, r *http.Request) {
 		srv.serveError(w, http.StatusNotFound, errors.New("page not found"))
 	})

@@ -24,7 +24,8 @@ type Config struct {
 	// expressed in seconds. Use [Config.PollInterval] to get it in [time.Duration].
 	RawPollInterval int64 `hcl:"poll_interval,optional"`
 
-	OAuth *OIDCConfig `hcl:"auth,block"`
+	DangerRunWithoutOAuth bool        `hcl:"danger_run_without_oauth,optional"`
+	OAuth                 *OIDCConfig `hcl:"auth,block"`
 }
 
 func ParseConfig(src []byte) (*Config, error) {
